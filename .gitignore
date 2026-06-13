@@ -17,3 +17,6 @@
 # JetBrains
 /.idea/
 
+# Serena MCP
+/.serena/
+
