@@ -12,6 +12,8 @@ import { UserAvatar } from "~/components/user-avatar";
 import { getCurrentUserId } from "~/lib/session";
 import { formatPrice } from "~/lib/utils";
 import { getUserEnrolledCourses } from "~/services/enrollmentService";
+import { getCourseRatingSummaries } from "~/services/ratingService";
+import { StarRatingDisplay } from "~/components/star-rating";
 import { calculateProgress, getCompletedLessonCount } from "~/services/progressService";
 import { resolveCountry } from "~/lib/country.server";
 import { calculatePppPrice } from "~/lib/ppp";
@@ -55,17 +57,22 @@ export async function loader({ request }: Route.LoaderArgs) {
     }
   }
 
+  const ratingSummaries = getCourseRatingSummaries(courses.map((c) => c.id));
+
   const coursesWithLessonCount = courses.map((course) => {
     const userProgress = progressMap.get(course.id);
     const pppPrice = course.pppEnabled
       ? calculatePppPrice(course.price, country)
       : course.price;
+    const rating = ratingSummaries.get(course.id) ?? { average: 0, count: 0 };
     return {
       ...course,
       lessonCount: getLessonCountForCourse(course.id),
       progress: userProgress?.progress ?? null,
       completedLessons: userProgress?.completedLessons ?? null,
       pppPrice,
+      ratingAverage: rating.average,
+      ratingCount: rating.count,
     };
   });
 
@@ -224,6 +231,15 @@ export default function CourseCatalog({ loaderData }: Route.ComponentProps) {
                         style={{ width: `${course.progress}%` }}
                       />
                     </div>
+                  </CardContent>
+                )}
+                {course.ratingCount > 0 && (
+                  <CardContent className="pt-0">
+                    <StarRatingDisplay
+                      average={course.ratingAverage}
+                      count={course.ratingCount}
+                      size="sm"
+                    />
                   </CardContent>
                 )}
                 <CardFooter className="flex items-center justify-between text-xs text-muted-foreground">

@@ -9,6 +9,11 @@ import {
 } from "~/services/courseService";
 import { isUserEnrolled } from "~/services/enrollmentService";
 import {
+  getCourseRatingSummary,
+  getUserRating,
+  upsertRating,
+} from "~/services/ratingService";
+import {
   calculateProgress,
   getLessonProgressForCourse,
   getNextIncompleteLesson,
@@ -37,6 +42,10 @@ import {
 } from "lucide-react";
 import { CourseImage } from "~/components/course-image";
 import { UserAvatar } from "~/components/user-avatar";
+import {
+  StarRatingDisplay,
+  StarRatingInput,
+} from "~/components/star-rating";
 import { data, isRouteErrorResponse } from "react-router";
 import { formatDuration, formatPrice } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
@@ -65,17 +74,20 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const lessonCount = getLessonCountForCourse(course.id);
+  const ratingSummary = getCourseRatingSummary(course.id);
   const currentUserId = await getCurrentUserId(request);
 
   let enrolled = false;
   let progress = 0;
   let lessonProgressMap: Record<number, string> = {};
   let nextLessonId: number | null = null;
+  let userRating: number | null = null;
 
   if (currentUserId) {
     enrolled = isUserEnrolled(currentUserId, course.id);
 
     if (enrolled) {
+      userRating = getUserRating(currentUserId, course.id);
       progress = calculateProgress(currentUserId, course.id, false, false);
 
       const progressRecords = getLessonProgressForCourse(
@@ -113,10 +125,47 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     currentUserId,
     pppPrice,
     tierInfo,
+    ratingSummary,
+    userRating,
   };
 }
 
-// No action — enrollment is handled via the purchase confirmation page
+// Enrollment is handled via the purchase confirmation page. The action here
+// handles star ratings, which only enrolled students may submit.
+export async function action({ params, request }: Route.ActionArgs) {
+  const course = getCourseBySlug(params.slug);
+  if (!course) {
+    throw data("Course not found", { status: 404 });
+  }
+
+  const currentUserId = await getCurrentUserId(request);
+  if (!currentUserId) {
+    throw data("You must be logged in to rate this course.", { status: 401 });
+  }
+
+  if (!isUserEnrolled(currentUserId, course.id)) {
+    throw data("Only enrolled students can rate this course.", {
+      status: 403,
+    });
+  }
+
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+  if (intent !== "rate") {
+    throw data("Unknown action.", { status: 400 });
+  }
+
+  const rating = Number(formData.get("rating"));
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    return data(
+      { error: "Rating must be between 1 and 5 stars." },
+      { status: 400 }
+    );
+  }
+
+  upsertRating(currentUserId, course.id, rating);
+  return { ok: true };
+}
 
 export function HydrateFallback() {
   return (
@@ -181,6 +230,8 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
     currentUserId,
     pppPrice,
     tierInfo,
+    ratingSummary,
+    userRating,
   } = loaderData;
   const isInstructor = currentUserId === course.instructorId;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -314,6 +365,11 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
             <BookOpen className="size-4" />
             {lessonCount} lessons
           </span>
+          <StarRatingDisplay
+            average={ratingSummary.average}
+            count={ratingSummary.count}
+            size="sm"
+          />
           {totalDuration > 0 && (
             <span className="flex items-center gap-1">
               <Clock className="size-4" />
@@ -442,6 +498,14 @@ export default function CourseDetail({ loaderData }: Route.ComponentProps) {
                   </p>
                 )}
               </div>
+              {enrolled && (
+                <div className="border-t pt-4">
+                  <h3 className="mb-2 text-sm font-semibold text-foreground">
+                    Rate this course
+                  </h3>
+                  <StarRatingInput currentRating={userRating} />
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
