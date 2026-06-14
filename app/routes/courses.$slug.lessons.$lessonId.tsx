@@ -7,6 +7,7 @@ import {
   getCourseWithDetails,
 } from "~/services/courseService";
 import { getLessonById } from "~/services/lessonService";
+import { getCommentsForLesson } from "~/services/commentService";
 import { getModuleById } from "~/services/moduleService";
 import { getCurrentUserId } from "~/lib/session";
 import { isUserEnrolled } from "~/services/enrollmentService";
@@ -49,6 +50,7 @@ import {
 import { cn, formatDuration } from "~/lib/utils";
 import { renderMarkdown } from "~/lib/markdown.server";
 import { YouTubePlayer } from "~/components/youtube-player";
+import { CommentSection } from "~/components/comment-section";
 import { data, isRouteErrorResponse } from "react-router";
 import { z } from "zod";
 import { resolveCountry } from "~/lib/country.server";
@@ -253,7 +255,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
       id: courseWithDetails.id,
       title: courseWithDetails.title,
       slug: courseWithDetails.slug,
+      instructorId: courseWithDetails.instructorId,
     },
+    comments: getCommentsForLesson(lessonId),
     curriculum: courseWithDetails.modules.map((m) => ({
       id: m.id,
       title: m.title,
@@ -382,6 +386,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     pppBlocked,
     pppBlockedCountry,
     pppPurchaseCountry,
+    comments,
   } = loaderData;
   const [autoplay, toggleAutoplay] = useAutoplay();
   const fetcher = useFetcher({ key: `mark-complete-${lesson.id}` });
@@ -591,6 +596,14 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
               )}
             </div>
           )}
+
+          {/* Discussion */}
+          <CommentSection
+            lessonId={lesson.id}
+            comments={comments}
+            enrolled={enrolled}
+            instructorId={course.instructorId}
+          />
 
           {/* Prev/Next Navigation */}
           <div className="flex items-center justify-between border-t pt-6">
