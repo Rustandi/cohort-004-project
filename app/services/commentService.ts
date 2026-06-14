@@ -39,16 +39,35 @@ export function getCommentsForLesson(lessonId: number): CommentWithAuthor[] {
     .all();
 }
 
+// A single comment row by id (no author join), or undefined if missing.
+// Used to authorize edits/deletes.
+export function getCommentById(commentId: number) {
+  return db.select().from(comments).where(eq(comments.id, commentId)).get();
+}
+
 // Create a comment. Content is assumed already validated/trimmed by the caller
-// (see commentContentSchema).
+// (see commentContentSchema). createdAt and updatedAt are set to the same value
+// so a fresh comment never reads as "edited" (see isEdited).
 export function createComment(
   userId: number,
   lessonId: number,
   content: string
 ) {
+  const now = new Date().toISOString();
   return db
     .insert(comments)
-    .values({ userId, lessonId, content })
+    .values({ userId, lessonId, content, createdAt: now, updatedAt: now })
+    .returning()
+    .get();
+}
+
+// Update a comment's content and bump updatedAt. Caller authorizes (see
+// canEditComment) and validates content first.
+export function editComment(commentId: number, content: string) {
+  return db
+    .update(comments)
+    .set({ content, updatedAt: new Date().toISOString() })
+    .where(eq(comments.id, commentId))
     .returning()
     .get();
 }

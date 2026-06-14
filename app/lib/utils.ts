@@ -37,6 +37,14 @@ export function formatRelativeTime(iso: string, now: Date): string {
   return `${diffDays} ${diffDays === 1 ? "day" : "days"} ago`;
 }
 
+/**
+ * Whether a record has been edited since creation. Relies on createComment
+ * setting createdAt and updatedAt to the same value on insert.
+ */
+export function isEdited(createdAt: string, updatedAt: string): boolean {
+  return createdAt !== updatedAt;
+}
+
 export function formatDuration(
   minutes: number,
   showHours: boolean,

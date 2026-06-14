@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { formatRelativeTime } from "./utils";
+import { formatRelativeTime, isEdited } from "./utils";
+
+describe("isEdited", () => {
+  it("is false when createdAt and updatedAt are identical", () => {
+    const t = "2026-06-14T12:00:00.000Z";
+    expect(isEdited(t, t)).toBe(false);
+  });
+
+  it("is true when updatedAt differs from createdAt", () => {
+    expect(
+      isEdited("2026-06-14T12:00:00.000Z", "2026-06-14T12:05:00.000Z")
+    ).toBe(true);
+  });
+});
 
 describe("formatRelativeTime", () => {
   const now = new Date("2026-06-14T12:00:00.000Z");
