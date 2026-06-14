@@ -3,9 +3,12 @@ import type { Route } from "./+types/api.comments";
 import { getCurrentUserId } from "~/lib/session";
 import { parseFormData } from "~/lib/validation";
 import { commentContentSchema } from "~/lib/comment-validation";
+import { canEditComment } from "~/lib/comment-permissions";
 import { isUserEnrolled } from "~/services/enrollmentService";
 import {
   createComment,
+  editComment,
+  getCommentById,
   getCourseIdForLesson,
 } from "~/services/commentService";
 
@@ -42,6 +45,29 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     createComment(currentUserId, lessonId, parsed.data.content);
+    return { success: true as const };
+  }
+
+  if (intent === "edit-comment") {
+    const commentId = Number(formData.get("commentId"));
+    if (!Number.isInteger(commentId)) {
+      throw data("Invalid comment", { status: 400 });
+    }
+
+    const comment = getCommentById(commentId);
+    if (!comment) {
+      throw data("Comment not found", { status: 404 });
+    }
+    if (!canEditComment(comment, currentUserId)) {
+      throw data("You can only edit your own comment", { status: 403 });
+    }
+
+    const parsed = parseFormData(formData, commentContentSchema);
+    if (!parsed.success) {
+      return { success: false as const, error: parsed.errors.content };
+    }
+
+    editComment(commentId, parsed.data.content);
     return { success: true as const };
   }
 

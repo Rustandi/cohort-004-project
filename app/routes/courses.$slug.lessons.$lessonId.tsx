@@ -603,6 +603,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             comments={comments}
             enrolled={enrolled}
             instructorId={course.instructorId}
+            currentUserId={currentUserId}
           />
 
           {/* Prev/Next Navigation */}
