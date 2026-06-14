@@ -72,6 +72,12 @@ export function editComment(commentId: number, content: string) {
     .get();
 }
 
+// Hard-delete a comment by id. Safe because comments are flat — there are no
+// replies to orphan (see ADR-0001). Caller authorizes first (canDeleteComment).
+export function deleteComment(commentId: number) {
+  return db.delete(comments).where(eq(comments.id, commentId)).run();
+}
+
 // The id of the course that owns a lesson, or null if the lesson does not exist.
 // Used to gate comment access on enrollment / instructor ownership.
 export function getCourseIdForLesson(lessonId: number): number | null {

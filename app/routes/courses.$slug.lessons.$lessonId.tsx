@@ -8,6 +8,7 @@ import {
 } from "~/services/courseService";
 import { getLessonById } from "~/services/lessonService";
 import { getCommentsForLesson } from "~/services/commentService";
+import { getUserById } from "~/services/userService";
 import { getModuleById } from "~/services/moduleService";
 import { getCurrentUserId } from "~/lib/session";
 import { isUserEnrolled } from "~/services/enrollmentService";
@@ -275,6 +276,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     lessonStatus,
     enrolled,
     currentUserId,
+    currentUserRole: currentUserId
+      ? (getUserById(currentUserId)?.role ?? null)
+      : null,
     prevLesson,
     nextLesson,
     quiz,
@@ -376,6 +380,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
     lessonStatus,
     enrolled,
     currentUserId,
+    currentUserRole,
     prevLesson,
     nextLesson,
     quiz,
@@ -604,6 +609,7 @@ export default function LessonViewer({ loaderData }: Route.ComponentProps) {
             enrolled={enrolled}
             instructorId={course.instructorId}
             currentUserId={currentUserId}
+            currentUserRole={currentUserRole}
           />
 
           {/* Prev/Next Navigation */}

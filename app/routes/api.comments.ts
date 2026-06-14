@@ -3,11 +3,14 @@ import type { Route } from "./+types/api.comments";
 import { getCurrentUserId } from "~/lib/session";
 import { parseFormData } from "~/lib/validation";
 import { commentContentSchema } from "~/lib/comment-validation";
-import { canEditComment } from "~/lib/comment-permissions";
+import { canEditComment, canDeleteComment } from "~/lib/comment-permissions";
 import { isUserEnrolled } from "~/services/enrollmentService";
+import { getUserById } from "~/services/userService";
+import { getCourseById } from "~/services/courseService";
 import {
   createComment,
   editComment,
+  deleteComment,
   getCommentById,
   getCourseIdForLesson,
 } from "~/services/commentService";
@@ -68,6 +71,40 @@ export async function action({ request }: Route.ActionArgs) {
     }
 
     editComment(commentId, parsed.data.content);
+    return { success: true as const };
+  }
+
+  if (intent === "delete-comment") {
+    const commentId = Number(formData.get("commentId"));
+    if (!Number.isInteger(commentId)) {
+      throw data("Invalid comment", { status: 400 });
+    }
+
+    const comment = getCommentById(commentId);
+    if (!comment) {
+      throw data("Comment not found", { status: 404 });
+    }
+
+    // Re-resolve the lesson → course chain server-side and re-check the
+    // author-or-moderator permission. Never trust a client-sent flag (ADR-0005).
+    const courseId = getCourseIdForLesson(comment.lessonId);
+    const course = courseId === null ? null : getCourseById(courseId);
+    if (!course) {
+      throw data("Course not found", { status: 404 });
+    }
+
+    const actor = getUserById(currentUserId);
+    if (!actor) {
+      throw data("User not found", { status: 404 });
+    }
+
+    if (
+      !canDeleteComment(comment, { id: actor.id, role: actor.role }, course.instructorId)
+    ) {
+      throw data("You are not allowed to delete this comment", { status: 403 });
+    }
+
+    deleteComment(commentId);
     return { success: true as const };
   }
 
