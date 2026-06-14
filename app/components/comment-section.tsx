@@ -6,9 +6,10 @@ import { UserAvatar } from "~/components/user-avatar";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { formatRelativeTime, isEdited } from "~/lib/utils";
-import { canEditComment } from "~/lib/comment-permissions";
+import { canEditComment, canDeleteComment } from "~/lib/comment-permissions";
 import { MAX_COMMENT_LENGTH } from "~/lib/comment-validation";
 import type { CommentWithAuthor } from "~/services/commentService";
+import type { UserRole } from "~/db/schema";
 
 type CommentSectionProps = {
   lessonId: number;
@@ -16,6 +17,7 @@ type CommentSectionProps = {
   enrolled: boolean;
   instructorId: number;
   currentUserId: number | null;
+  currentUserRole: UserRole | null;
 };
 
 export function CommentSection({
@@ -24,6 +26,7 @@ export function CommentSection({
   enrolled,
   instructorId,
   currentUserId,
+  currentUserRole,
 }: CommentSectionProps) {
   const fetcher = useFetcher<{ success: boolean; error?: string }>();
   const formRef = useRef<HTMLFormElement>(null);
@@ -97,6 +100,7 @@ export function CommentSection({
               comment={comment}
               instructorId={instructorId}
               currentUserId={currentUserId}
+              currentUserRole={currentUserRole}
               now={now}
             />
           ))}
@@ -110,31 +114,60 @@ function CommentItem({
   comment,
   instructorId,
   currentUserId,
+  currentUserRole,
   now,
 }: {
   comment: CommentWithAuthor;
   instructorId: number;
   currentUserId: number | null;
+  currentUserRole: UserRole | null;
   now: Date;
 }) {
   const fetcher = useFetcher<{ success: boolean; error?: string }>();
   const [editing, setEditing] = useState(false);
+  const pendingIntent = useRef<string | null>(null);
   const isSaving =
     fetcher.state !== "idle" &&
     fetcher.formData?.get("intent") === "edit-comment";
+  const isDeleting =
+    fetcher.state !== "idle" &&
+    fetcher.formData?.get("intent") === "delete-comment";
 
-  // Close the editor on a successful save; toast on validation error.
+  // Close the editor on a successful save; confirm deletes; toast on error.
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       if (fetcher.data.success) {
-        setEditing(false);
+        if (pendingIntent.current === "delete-comment") {
+          toast.success("Comment deleted");
+        } else {
+          setEditing(false);
+        }
       } else if (fetcher.data.error) {
         toast.error(fetcher.data.error);
       }
+      pendingIntent.current = null;
     }
   }, [fetcher.state, fetcher.data]);
 
   const canEdit = canEditComment(comment, currentUserId);
+  const canDelete = canDeleteComment(
+    comment,
+    currentUserId === null || currentUserRole === null
+      ? null
+      : { id: currentUserId, role: currentUserRole },
+    instructorId
+  );
+
+  // Hard delete (ADR-0001), guarded by a confirm. Permission is re-checked
+  // server-side on the resource route — this gate is convenience only.
+  function handleDelete() {
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    pendingIntent.current = "delete-comment";
+    fetcher.submit(
+      { intent: "delete-comment", commentId: String(comment.id) },
+      { method: "post", action: "/api/comments" }
+    );
+  }
 
   return (
     <li className="flex gap-3">
@@ -193,14 +226,28 @@ function CommentItem({
             <p className="whitespace-pre-wrap text-sm text-foreground/90">
               {comment.content}
             </p>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Edit
-              </button>
+            {(canEdit || canDelete) && (
+              <div className="mt-1 flex gap-3">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Edit
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  >
+                    {isDeleting ? "Deleting…" : "Delete"}
+                  </button>
+                )}
+              </div>
             )}
           </>
         )}
