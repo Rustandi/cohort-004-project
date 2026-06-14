@@ -4,6 +4,7 @@ import {
   integer,
   real,
   unique,
+  index,
 } from "drizzle-orm/sqlite-core";
 
 export enum UserRole {
@@ -281,4 +282,28 @@ export const courseRatings = sqliteTable(
       .$defaultFn(() => new Date().toISOString()),
   },
   (table) => [unique().on(table.courseId, table.userId)]
+);
+
+// Flat, plain-text discussion comment a student leaves on a lesson (see ADR-0001,
+// ADR-0003). Keyed by lesson only; the course is derived via lesson → module →
+// course (ADR-0002). Indexed by lesson for the newest-first list query.
+export const comments = sqliteTable(
+  "comments",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    lessonId: integer("lesson_id")
+      .notNull()
+      .references(() => lessons.id),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id),
+    content: text("content").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+    updatedAt: text("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => [index("comments_lesson_id_idx").on(table.lessonId)]
 );
